@@ -1,0 +1,126 @@
+# DTI Core API Service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dti-core
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: dti-core
+  template:
+    metadata:
+      labels:
+        app: dti-core
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: dti-core
+          image: digitaltvilling/dt-dti:core${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 1870
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "400Mi"
+            limits:
+              cpu: "200m"
+              memory: "768Mi"
+          readinessProbe:
+            httpGet:
+              path: /core/health
+              port: 1870
+            initialDelaySeconds: 15  # Give Node-RED time to start
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /core/health
+              port: 1870
+            initialDelaySeconds: 80
+            periodSeconds: 30
+            failureThreshold: 3
+          env:
+            - name: DTI_INSTANCE
+              value: "DTI-DT-Core"
+            - name: environment
+              value: "${ENVIRONMENT_NAME}"
+            - name: RUNTIME_LOCATION
+              value: "${NAMESPACE}"
+            - name: DT_JWT_URL
+              value: "${DT_JWT_URL}"
+            - name: DOCKER_CONTAINER
+              value: "/opt/data"
+            - name: DOMAIN
+              value: "${DOMAIN}"
+            - name: TEST_DATA
+              value: "real"
+            - name: API_DT_GETDATA_KEY
+              value: "${API_DT_GETDATA_KEY}"
+            - name: API_DT_GETDATA_CLIENT
+              value: "${API_DT_GETDATA_CLIENT}"
+            - name: mqtt_obire_ip
+              value: "${MQTT_IP}"
+            - name: mqtt_dt_user
+              value: "${MQTT_USER}"
+            - name: mqtt_dt_password
+              value: "${MQTT_PASSWORD}"
+            - name: DT_POSTGRES_DTICORE_IP
+              value: "${POSTGRES_IP}"
+            - name: DT_POSTGRES_DTICORE_USER
+              value: "postgres"
+            - name: DT_POSTGRES_DTICORE_INSTANCE
+              value: "dticore"
+            - name: DT_POSTGRES_DTICORE_PASSWORD
+              value: "${POSTGRES_PASSWORD}"
+            - name: OpenAI_Key
+              value: "Bearer ${OPENAI_KEY}"
+            - name: MINIO_DEFAULT_HOST
+              value: "${MINIO_HOST}"
+            - name: MINIO_DEFAULT_ACCESS_KEY
+              value: "${MINIO_ACCESS_KEY}"
+            - name: MINIO_DEFAULT_SECRET
+              value: "${MINIO_SECRET_KEY}"
+            - name: DT_NEO4J_DOCS_URL
+              value: "${NEO4J_URL}"
+            - name: DT_NEO4J_DOCS_USER
+              value: "${NEO4J_USER}"
+            - name: DT_NEO4J_DOCS_PASSWORD
+              value: "${NEO4J_PASSWORD}"
+            - name: DT_POSTGRES_BASEROW_IP
+              value: "${BASEROW_IP}"
+            - name: DT_POSTGRES_BASEROW_USER
+              value: "${BASEROW_USER}"
+            - name: DT_POSTGRES_BASEROW_PASSWORD
+              value: "${BASEROW_PASSWORD}"
+            - name: DT_POSTGRES_BASEROW_INSTANCE
+              value: "${BASEROW_INSTANCE}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dti-core
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: dti-core
+  ports:
+    - port: 80
+      targetPort: 1870
+# No public Ingress - internal service only

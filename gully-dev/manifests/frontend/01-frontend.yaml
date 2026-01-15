@@ -1,0 +1,147 @@
+# Frontend Web Application (Public-facing)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Zero-downtime: always keep at least 1 pod running
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: frontend
+          image: digitaltvilling/dt-apps-platform:dev
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "300Mi"
+            limits:
+              cpu: "200m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /login  # Use /login instead of / to avoid redirect (302 -> 200)
+              port: 3000
+            initialDelaySeconds: 15  # Give server more time to start
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 3000
+            initialDelaySeconds: 80
+            periodSeconds: 30
+            failureThreshold: 3
+          env:
+            - name: PUBLIC_DOMAIN
+              value: "${DOMAIN}"
+            - name: DTI_CORE_URL
+              value: "http://dti-core/core/v3"
+            - name: DTI_PARTITUR_URL
+              value: "http://dti-partitur/partitur/v3"
+            - name: DTI_CALCIFER_URL
+              value: "http://dti-ai/ai/v3"
+            - name: OAUTH_AUTHORIZATION_ENDPOINT
+              value: "${OAUTH_AUTHORIZATION_ENDPOINT}"
+            - name: OAUTH_TOKEN_ENDPOINT
+              value: "${OAUTH_TOKEN_ENDPOINT}"
+            - name: OAUTH_CLIENT_ID
+              value: "${OAUTH_CLIENT_ID}"
+            - name: OAUTH_CLIENT_SECRET
+              value: "${OAUTH_CLIENT_SECRET}"
+            - name: OAUTH_REDIRECT_URI
+              value: "http://${DOMAIN}/api/callback"
+            - name: OAUTH_LOGOUT_REDIRECT_URI
+              value: "http://${DOMAIN}/api/logout"
+            - name: OAUTH_TOKEN_REVOCATION_ENDPOINT
+              value: "${OAUTH_TOKEN_REVOCATION_ENDPOINT}"
+            - name: ORY_PROJECT_SLUG
+              value: "${ORY_PROJECT_SLUG}"
+            - name: ORY_API_KEY
+              value: "${ORY_API_KEY}"
+            - name: SESSION_SECRET
+              value: "${SESSION_SECRET}"
+            - name: PORT
+              value: "3000"
+            - name: VITE_MAPBOX_ACCESS_TOKEN
+              value: "${MAPBOX_ACCESS_TOKEN}"
+            - name: DTI_FILES_URL
+              value: "http://dti-core/core/v3/integrations"
+            - name: JWT_URL
+              value: "${DT_JWT_URL}"
+            - name: OAUTH_JWT_URL
+              value: "${OAUTH_JWT_URL}"
+            - name: IDP_TYPE_QUERY_PARAM
+              value: "idp=openid&"
+            - name: GH_ACCESS_TOKEN
+              value: "${GH_ACCESS_TOKEN}"
+            - name: GH_ORG_NAME
+              value: "Digital-Tvilling"
+            - name: GITHUB_API_TOKEN
+              value: "${GITHUB_API_TOKEN}"
+            # Internal service URLs (not exposed publicly)
+            - name: CALCIFER_GRADIO_URL
+              value: "http://calcifer-gradio"
+            - name: CALCIFER_URL
+              value: "http://calcifer-server"
+            - name: CALCIFER_MCP_SERVERS_URL
+              value: "http://calcifer-server/api/mcp/status?deployment=gully-dev"
+            - name: SKALA_WS_URL
+              value: "ws://dti-core/ws/skala"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 3000
+---
+# Public Ingress - only the frontend is exposed
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+  namespace: ${NAMESPACE}
+  annotations:
+    # Traefik will handle incoming traffic on ports 80/443
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  rules:
+    - host: gully-dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

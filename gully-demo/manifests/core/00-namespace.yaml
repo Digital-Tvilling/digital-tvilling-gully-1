@@ -1,0 +1,8 @@
+# Kubernetes namespace for all Digital Tvilling resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: digital-tvilling
+    app.kubernetes.io/environment: ${ENVIRONMENT_NAME}

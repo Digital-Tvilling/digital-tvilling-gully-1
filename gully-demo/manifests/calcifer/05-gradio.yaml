@@ -1,0 +1,99 @@
+# Calcifer Gradio Web Interface
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calcifer-gradio
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: calcifer-gradio
+  template:
+    metadata:
+      labels:
+        app: calcifer-gradio
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: calcifer-gradio
+          image: digitaltvilling/dt-calcifer:calcifer-gradio-interface${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 7860
+          env:
+            - name: CALCIFER_API_URL
+              value: "http://calcifer-server"
+            - name: CALCIFER_LOG_DIR
+              value: "/var/log/calcifer"
+            - name: OPENAI_API_KEY
+              value: "${CALCIFER_OPENAI_API_KEY}"
+            - name: NEO4J_URL
+              value: "${CALCIFER_NEO4J_URL}"
+            - name: NEO4J_READER_USERNAME
+              value: "${CALCIFER_NEO4J_READER_USERNAME}"
+            - name: NEO4J_READER_PASSWORD
+              value: "${CALCIFER_NEO4J_READER_PASSWORD}"
+            - name: NEO4J_WRITER_USERNAME
+              value: "${CALCIFER_NEO4J_WRITER_USERNAME}"
+            - name: NEO4J_WRITER_PASSWORD
+              value: "${CALCIFER_NEO4J_WRITER_PASSWORD}"
+            - name: NEO4J_INSTANCE_CREATOR_USERNAME
+              value: "${CALCIFER_NEO4J_INSTANCE_CREATOR_USERNAME}"
+            - name: NEO4J_INSTANCE_CREATOR_PASSWORD
+              value: "${CALCIFER_NEO4J_INSTANCE_CREATOR_PASSWORD}"
+            - name: NEO4J_DOCUMENTS_DB
+              value: "${CALCIFER_NEO4J_DOCUMENTS_DB}"
+            - name: POSTGRES_HOST
+              value: "${CALCIFER_POSTGRES_HOST}"
+            - name: POSTGRES_PORT
+              value: "${CALCIFER_POSTGRES_PORT}"
+            - name: POSTGRES_READER_USER
+              value: "${CALCIFER_POSTGRES_READER_USER}"
+            - name: POSTGRES_READER_PASSWORD
+              value: "${CALCIFER_POSTGRES_READER_PASSWORD}"
+            - name: MINIO_ACCESS_KEY
+              value: "${CALCIFER_MINIO_ACCESS_KEY}"
+            - name: MINIO_SECRET_KEY
+              value: "${CALCIFER_MINIO_SECRET_KEY}"
+            - name: LANGSMITH_TRACING
+              value: "${LANGSMITH_TRACING}"
+            - name: LANGSMITH_ENDPOINT
+              value: "${LANGSMITH_ENDPOINT}"
+            - name: LANGSMITH_API_KEY
+              value: "${LANGSMITH_API_KEY}"
+            - name: LANGSMITH_PROJECT
+              value: "${LANGSMITH_PROJECT}"
+            - name: CALCIFER_DEPLOYMENT
+              value: "${CALCIFER_DEPLOYMENT}"
+            - name: DEBUG
+              value: "${CALCIFER_DEBUG}"
+            - name: CALCIFER_INSTANCES_ENDPOINT
+              value: "http://extraction-orchestrator/instances"
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/calcifer
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: calcifer-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: calcifer-gradio
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: calcifer-gradio
+  ports:
+    - port: 80
+      targetPort: 7860
+# No public Ingress - internal service only (accessed via frontend)

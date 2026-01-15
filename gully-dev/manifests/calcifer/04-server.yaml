@@ -1,0 +1,164 @@
+# Calcifer Main Server (LLM-powered assistant)
+# GPU-enabled for NVIDIA DGX Spark on-premises deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calcifer-server
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: calcifer-server
+  template:
+    metadata:
+      labels:
+        app: calcifer-server
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      # GPU scheduling - ensure pod lands on GPU node
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: calcifer-server
+          image: digitaltvilling/dt-calcifer:calcifer-core${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          command: ["sh", "-c", "uvicorn core.app:app --host 0.0.0.0 --port 8000 --workers 4"]
+          # GPU resources for DGX Spark
+          # Uncomment to enable GPU acceleration for local inference
+          # resources:
+          #   limits:
+          #     nvidia.com/gpu: 1
+          env:
+            - name: OPENAI_API_KEY
+              value: "${CALCIFER_OPENAI_API_KEY}"
+            - name: NEO4J_URL
+              value: "${CALCIFER_NEO4J_URL}"
+            - name: NEO4J_READER_USERNAME
+              value: "${CALCIFER_NEO4J_READER_USERNAME}"
+            - name: NEO4J_READER_PASSWORD
+              value: "${CALCIFER_NEO4J_READER_PASSWORD}"
+            - name: NEO4J_WRITER_USERNAME
+              value: "${CALCIFER_NEO4J_WRITER_USERNAME}"
+            - name: NEO4J_WRITER_PASSWORD
+              value: "${CALCIFER_NEO4J_WRITER_PASSWORD}"
+            - name: NEO4J_INSTANCE_CREATOR_USERNAME
+              value: "${CALCIFER_NEO4J_INSTANCE_CREATOR_USERNAME}"
+            - name: NEO4J_INSTANCE_CREATOR_PASSWORD
+              value: "${CALCIFER_NEO4J_INSTANCE_CREATOR_PASSWORD}"
+            - name: NEO4J_DOCUMENTS_DB
+              value: "${CALCIFER_NEO4J_DOCUMENTS_DB}"
+            - name: POSTGRES_HOST
+              value: "${CALCIFER_POSTGRES_HOST}"
+            - name: POSTGRES_PORT
+              value: "${CALCIFER_POSTGRES_PORT}"
+            - name: POSTGRES_READER_USER
+              value: "${CALCIFER_POSTGRES_READER_USER}"
+            - name: POSTGRES_READER_PASSWORD
+              value: "${CALCIFER_POSTGRES_READER_PASSWORD}"
+            - name: MINIO_ACCESS_KEY
+              value: "${CALCIFER_MINIO_ACCESS_KEY}"
+            - name: MINIO_SECRET_KEY
+              value: "${CALCIFER_MINIO_SECRET_KEY}"
+            - name: CALCIFER_LOG_DIR
+              value: "/var/log/calcifer"
+            - name: CONFIG_PATH
+              value: "core/config"
+            - name: EMBEDDING_DIMENSION
+              value: "${CALCIFER_EMBEDDING_DIMENSION}"
+            - name: CONVERSATIONS_DB
+              value: "${CALCIFER_CONVERSATIONS_DB}"
+            - name: USE_RESPONSES_API
+              value: "${CALCIFER_USE_RESPONSES_API}"
+            - name: TOKEN_LIMIT_BEFORE_TRIM
+              value: "${CALCIFER_TOKEN_LIMIT_BEFORE_TRIM}"
+            - name: CALCIFER_MODEL
+              value: "${CALCIFER_MODEL}"
+            - name: REASONING_EFFORT
+              value: "${CALCIFER_REASONING_EFFORT}"
+            - name: TEMPERATURE
+              value: "${CALCIFER_TEMPERATURE}"
+            - name: SOURCES_BASE_URL
+              value: "${CALCIFER_SOURCES_BASE_URL}"
+            - name: PROMPT_ENRICHMENT
+              value: "${CALCIFER_PROMPT_ENRICHMENT}"
+            - name: LANGSMITH_TRACING
+              value: "${LANGSMITH_TRACING}"
+            - name: LANGSMITH_ENDPOINT
+              value: "${LANGSMITH_ENDPOINT}"
+            - name: LANGSMITH_API_KEY
+              value: "${LANGSMITH_API_KEY}"
+            - name: LANGSMITH_PROJECT
+              value: "${LANGSMITH_PROJECT}"
+            - name: CALCIFER_ALLOWED_ORIGINS
+              value: "${CALCIFER_ALLOWED_ORIGINS}"
+            - name: CALCIFER_DEPLOYMENT
+              value: "${CALCIFER_DEPLOYMENT}"
+            - name: DEBUG
+              value: "${CALCIFER_DEBUG}"
+            - name: AWS_BEDROCK_API_KEY
+              value: "${CALCIFER_AWS_BEDROCK_API_KEY}"
+            - name: AWS_BEARER_TOKEN_BEDROCK
+              value: "${CALCIFER_AWS_BEARER_TOKEN_BEDROCK}"
+            - name: CALCIFER_INSTANCES_ENDPOINT
+              value: "http://extraction-orchestrator/instances"
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/calcifer
+            - name: output
+              mountPath: /usr/src/calcifer/output
+      volumes:
+        - name: logs
+          emptyDir: {}  # Temporary fix - logs not persisted (see issue #5)
+        - name: output
+          emptyDir: {}  # Temporary fix - output not persisted
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: calcifer-server
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: calcifer-server
+  ports:
+    - port: 80
+      targetPort: 8000
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: calcifer-cors
+  namespace: ${NAMESPACE}
+spec:
+  headers:
+    accessControlAllowMethods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+      - "OPTIONS"
+    accessControlAllowHeaders:
+      - "Content-Type"
+      - "Authorization"
+      - "X-Requested-With"
+      - "Cache-Control"
+    accessControlAllowOriginList:
+      - "http://${DOMAIN}"
+      - "http://localhost:3000"
+    accessControlAllowCredentials: true
+    accessControlMaxAge: 86400
+---
+# Note: calcifer-server is internal only - accessed via frontend proxy
+# No public Ingress exposed (like prod)

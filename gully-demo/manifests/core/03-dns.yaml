@@ -1,0 +1,64 @@
+# DNS server for wildcard domain resolution via Tailscale
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dnsmasq-config
+  namespace: ${NAMESPACE}
+data:
+  dnsmasq.conf: |
+    no-resolv
+    address=/${DOMAIN}/${TAILSCALE_IP}
+    log-queries
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dns
+  template:
+    metadata:
+      labels:
+        app: dns
+    spec:
+      containers:
+        - name: dnsmasq
+          image: andyshinn/dnsmasq:2.83
+          args: ["-k", "-C", "/etc/dnsmasq/dnsmasq.conf"]
+          ports:
+            - containerPort: 53
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dnsmasq
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "50m"
+      volumes:
+        - name: config
+          configMap:
+            name: dnsmasq-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dns
+  namespace: ${NAMESPACE}
+spec:
+  type: LoadBalancer
+  selector:
+    app: dns
+  ports:
+    - name: dns
+      port: 5353
+      targetPort: 53
+      protocol: UDP

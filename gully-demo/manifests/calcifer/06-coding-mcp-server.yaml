@@ -1,0 +1,73 @@
+# Coding MCP Server (GitHub, ElevenLabs integrations)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coding-mcp-server
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coding-mcp-server
+  template:
+    metadata:
+      labels:
+        app: coding-mcp-server
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: coding-mcp-server
+          image: digitaltvilling/dt-calcifer:coding-mcp-server${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9002
+          env:
+            - name: GITHUB_TOKEN
+              value: "${CALCIFER_GITHUB_TOKEN}"
+            - name: CALCIFER_LOG_DIR
+              value: "/var/log/calcifer"
+            - name: ELEVENLABS_API_KEY
+              value: "${ELEVENLABS_API_KEY}"
+            - name: ELEVENLABS_DEFAULT_VOICE_ID
+              value: "${ELEVENLABS_DEFAULT_VOICE_ID}"
+            - name: ELEVENLABS_DEFAULT_LANGUAGE
+              value: "${ELEVENLABS_DEFAULT_LANGUAGE}"
+            - name: ELEVENLABS_DEFAULT_PHONE_NUMBER_ID
+              value: "${ELEVENLABS_DEFAULT_PHONE_NUMBER_ID}"
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/calcifer
+            - name: output
+              mountPath: /usr/src/calcifer/output
+            - name: config
+              mountPath: /usr/src/calcifer/core/config
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: calcifer-logs
+        - name: output
+          persistentVolumeClaim:
+            claimName: calcifer-output
+        - name: config
+          persistentVolumeClaim:
+            claimName: calcifer-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coding-mcp-server
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: coding-mcp-server
+  ports:
+    - port: 80
+      targetPort: 9002
+# No public Ingress - internal service only

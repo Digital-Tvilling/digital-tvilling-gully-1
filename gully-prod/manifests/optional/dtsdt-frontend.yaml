@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dtsdt-frontend
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dtsdt-frontend
+  template:
+    metadata:
+      labels:
+        app: dtsdt-frontend
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: dtsdt-frontend
+          image: digitaltvilling/dtsdt-frontend:${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3300
+          env:
+            - name: PORT
+              value: "3300"
+            - name: API_URL
+              value: "http://dtsdt-backend"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3300
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3300
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dtsdt-frontend
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: dtsdt-frontend
+  ports:
+    - port: 80
+      targetPort: 3300
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dtsdt-frontend
+  namespace: ${NAMESPACE}
+spec:
+  rules:
+    - host: dtsdt.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dtsdt-frontend
+                port:
+                  number: 80

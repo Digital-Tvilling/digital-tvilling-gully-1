@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dtsdt-backend
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dtsdt-backend
+  template:
+    metadata:
+      labels:
+        app: dtsdt-backend
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: dtsdt-backend
+          image: digitaltvilling/dtsdt-backend:${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3301
+          env:
+            - name: API_PORT
+              value: "3301"
+            - name: NEO4J_URI
+              value: "${DTSDT_NEO4J_URI}"
+            - name: NEO4J_USER
+              value: "${DTSDT_NEO4J_USER}"
+            - name: NEO4J_PASSWORD
+              value: "${DTSDT_NEO4J_PASSWORD}"
+            - name: NEO4J_DATABASE
+              value: "${DTSDT_NEO4J_DATABASE}"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3301
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3301
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dtsdt-backend
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: dtsdt-backend
+  ports:
+    - port: 80
+      targetPort: 3301
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dtsdt-backend
+  namespace: ${NAMESPACE}
+spec:
+  rules:
+    - host: dtsdt-api.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dtsdt-backend
+                port:
+                  number: 80

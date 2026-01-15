@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dti-skala
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dti-skala
+  template:
+    metadata:
+      labels:
+        app: dti-skala
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: dti-skala
+          image: digitaltvilling/dt-dti:opus2-dti-skala${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3007
+          volumeMounts:
+            - name: config
+              mountPath: /app/base/config
+              readOnly: true
+          env:
+            # Core DTI configuration
+            - name: DTI_INSTANCE
+              value: "dti-skala"
+            - name: PORT
+              value: "3007"
+            - name: HOST
+              value: "0.0.0.0"
+
+            # Database configuration
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DATABASE
+              value: "dti_skala"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              value: "${POSTGRES_PASSWORD}"
+
+            # Logging
+            - name: LOG_LEVEL
+              value: "debug"
+            - name: LOG_PRETTY
+              value: "true"
+            - name: FEATURES
+              value: "swagger"
+            - name: DTI_SERVICE_NAME
+              value: "dti_skala"
+
+            # JWT Configuration (for authentication with dti-authorization)
+            - name: DTI_AUTH_JWT_SECRET
+              value: "${DTI_AUTH_JWT_SECRET}"
+            - name: DTI_AUTH_URL
+              value: "http://dti-authorization"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3007
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3007
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: dti-skala-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dti-skala
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: dti-skala
+  ports:
+    - port: 80
+      targetPort: 3007
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dti-skala
+  namespace: ${NAMESPACE}
+spec:
+  rules:
+    - host: dti-skala.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dti-skala
+                port:
+                  number: 80

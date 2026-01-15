@@ -1,0 +1,78 @@
+# DTI AI/Calcifer API Service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dti-ai
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dti-ai
+  template:
+    metadata:
+      labels:
+        app: dti-ai
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: dti-ai
+          image: digitaltvilling/dt-dti:dt-ai${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 1874
+          env:
+            - name: DTI_INSTANCE
+              value: "DTI-Calcifer"
+            - name: environment
+              value: "${ENVIRONMENT_NAME}"
+            - name: RUNTIME_LOCATION
+              value: "${NAMESPACE}"
+            - name: DT_JWT_URL
+              value: "${DT_JWT_URL}"
+            - name: mqtt_obire_ip
+              value: "${MQTT_IP}"
+            - name: mqtt_dt_user
+              value: "${MQTT_USER}"
+            - name: mqtt_dt_password
+              value: "${MQTT_PASSWORD}"
+            - name: DT_POSTGRES_DTICORE_IP
+              value: "${POSTGRES_IP}"
+            - name: DT_POSTGRES_DTICORE_USER
+              value: "postgres"
+            - name: DT_POSTGRES_DTICORE_INSTANCE
+              value: "dticore"
+            - name: DT_POSTGRES_DTICORE_PASSWORD
+              value: "${POSTGRES_PASSWORD}"
+            - name: DT_NEO4J_PARTITUR_URL
+              value: "${NEO4J_URL}"
+            - name: DT_NEO4J_PARTITUR_USER
+              value: "${NEO4J_USER}"
+            - name: DT_NEO4J_PARTITUR_PASSWORD
+              value: "${NEO4J_PASSWORD}"
+            - name: DT_NEO4J_CALCIFER_STANDARD_INSTANCE
+              value: "${NEO4J_CALCIFER_INSTANCE}"
+            - name: CALCIFER_BACKEND_URL
+              value: "http://calcifer-server"
+            - name: CALCIFER_DOCS_EXTRACTOR_URL
+              value: "http://extraction-orchestrator"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dti-ai
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: dti-ai
+  ports:
+    - port: 80
+      targetPort: 1874
+# No public Ingress - internal service only

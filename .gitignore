@@ -1,0 +1,26 @@
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Editor directories
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+
+# Log files
+*.log
+logs/
+*.env
+# Ignore .env files in environment folders
+gully-*/.env

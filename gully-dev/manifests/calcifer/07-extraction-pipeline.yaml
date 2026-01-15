@@ -1,0 +1,549 @@
+# ============================================================================
+# Extraction Pipeline Services
+# ============================================================================
+# ConfigMap for entity-extractor term lists
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: entity-extractor-term-lists
+  namespace: ${NAMESPACE}
+data:
+  # Placeholder - populate with actual term list files
+  placeholder.txt: "# Add term list files here"
+---
+# ============================================================================
+# Orchestrator - Pipeline coordination
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extraction-orchestrator
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: extraction-orchestrator
+  template:
+    metadata:
+      labels:
+        app: extraction-orchestrator
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: extraction-orchestrator
+          image: digitaltvilling/dt-calcifer-extraction-pipeline:calcifer-orchestrator${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8100
+          env:
+            # Service URLs (K8s internal DNS - port 80)
+            - name: GRAPH_INTERFACE_URL
+              value: "http://extraction-graph-interface"
+            - name: CALCIFER_EXTRACTOR_URL
+              value: "http://extraction-calcifer-extractor"
+            - name: ENTITY_EXTRACTOR_URL
+              value: "http://extraction-entity-extractor"
+            - name: RAG_EXTRACTOR_URL
+              value: "http://extraction-rag-extractor"
+            # Neo4j
+            - name: NEO4J_URL
+              value: "${EXTRACTION_NEO4J_URL}"
+            - name: NEO4J_READER_USERNAME
+              value: "${EXTRACTION_NEO4J_READER_USERNAME}"
+            - name: NEO4J_READER_PASSWORD
+              value: "${EXTRACTION_NEO4J_READER_PASSWORD}"
+            - name: NEO4J_INSTANCE_CREATOR_USERNAME
+              value: "${EXTRACTION_NEO4J_INSTANCE_CREATOR_USERNAME}"
+            - name: NEO4J_INSTANCE_CREATOR_PASSWORD
+              value: "${EXTRACTION_NEO4J_INSTANCE_CREATOR_PASSWORD}"
+            # Neo4j per-database credentials
+            - name: NEO4J_EONV_USERNAME
+              value: "${EXTRACTION_NEO4J_EONV_USERNAME}"
+            - name: NEO4J_EONV_PASSWORD
+              value: "${EXTRACTION_NEO4J_EONV_PASSWORD}"
+            - name: NEO4J_RGBFASTIGHET_USERNAME
+              value: "${EXTRACTION_NEO4J_RGBFASTIGHET_USERNAME}"
+            - name: NEO4J_RGBFASTIGHET_PASSWORD
+              value: "${EXTRACTION_NEO4J_RGBFASTIGHET_PASSWORD}"
+            - name: NEO4J_JOHANTEST_USERNAME
+              value: "${EXTRACTION_NEO4J_JOHANTEST_USERNAME}"
+            - name: NEO4J_JOHANTEST_PASSWORD
+              value: "${EXTRACTION_NEO4J_JOHANTEST_PASSWORD}"
+            - name: NEO4J_DELAVALCALCIFER_USERNAME
+              value: "${EXTRACTION_NEO4J_DELAVALCALCIFER_USERNAME}"
+            - name: NEO4J_DELAVALCALCIFER_PASSWORD
+              value: "${EXTRACTION_NEO4J_DELAVALCALCIFER_PASSWORD}"
+            - name: NEO4J_FACILITYMGMT_USERNAME
+              value: "${EXTRACTION_NEO4J_FACILITYMGMT_USERNAME}"
+            - name: NEO4J_FACILITYMGMT_PASSWORD
+              value: "${EXTRACTION_NEO4J_FACILITYMGMT_PASSWORD}"
+            # PostgreSQL
+            - name: POSTGRES_HOST
+              value: "${EXTRACTION_POSTGRES_HOST}"
+            - name: POSTGRES_PORT
+              value: "${EXTRACTION_POSTGRES_PORT}"
+            - name: POSTGRES_READER_USERNAME
+              value: "${EXTRACTION_POSTGRES_READER_USERNAME}"
+            - name: POSTGRES_READER_PASSWORD
+              value: "${EXTRACTION_POSTGRES_READER_PASSWORD}"
+            - name: POSTGRES_DATABASE
+              value: "${EXTRACTION_POSTGRES_DATABASE}"
+            # MinIO
+            - name: MINIO_ACCESS_KEY
+              value: "${EXTRACTION_MINIO_ACCESS_KEY}"
+            - name: MINIO_SECRET_KEY
+              value: "${EXTRACTION_MINIO_SECRET_KEY}"
+            - name: MINIO_ENDPOINT_URL
+              value: "${EXTRACTION_MINIO_ENDPOINT_URL}"
+            - name: USE_MINIO
+              value: "${EXTRACTION_USE_MINIO}"
+            # OpenAI
+            - name: OPENAI_API_KEY
+              value: "${EXTRACTION_OPENAI_API_KEY}"
+            # Instance config
+            - name: DEFAULT_INSTANCE_ID
+              value: "${EXTRACTION_DEFAULT_INSTANCE_ID}"
+            - name: DEFAULT_BUCKET
+              value: "${EXTRACTION_DEFAULT_BUCKET}"
+            # LangSmith
+            - name: LANGSMITH_TRACING
+              value: "${LANGSMITH_TRACING}"
+            - name: LANGSMITH_ENDPOINT
+              value: "${LANGSMITH_ENDPOINT}"
+            - name: LANGSMITH_API_KEY
+              value: "${LANGSMITH_API_KEY}"
+            - name: LANGSMITH_PROJECT
+              value: "${LANGSMITH_PROJECT}"
+            # Logging
+            - name: FILE_LOG_LEVEL
+              value: "INFO"
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: calcifer-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extraction-orchestrator
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: extraction-orchestrator
+  ports:
+    - port: 80
+      targetPort: 8100
+# No public Ingress - internal service only
+---
+# ============================================================================
+# Graph Interface - Graph management
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extraction-graph-interface
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: extraction-graph-interface
+  template:
+    metadata:
+      labels:
+        app: extraction-graph-interface
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: extraction-graph-interface
+          image: digitaltvilling/dt-calcifer-extraction-pipeline:calcifer-graph-interface${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8101
+          env:
+            # Service URLs (K8s internal DNS - port 80)
+            - name: ENTITY_EXTRACTOR_URL
+              value: "http://extraction-entity-extractor"
+            - name: RAG_EXTRACTOR_URL
+              value: "http://extraction-rag-extractor"
+            # Entity extraction config
+            - name: ENTITY_EXTRACTION_MODEL
+              value: "${EXTRACTION_ENTITY_MODEL}"
+            - name: ENTITY_EXTRACTION_BATCH_SIZE
+              value: "${EXTRACTION_ENTITY_BATCH_SIZE}"
+            # Neo4j
+            - name: NEO4J_URL
+              value: "${EXTRACTION_NEO4J_URL}"
+            - name: NEO4J_READER_USERNAME
+              value: "${EXTRACTION_NEO4J_READER_USERNAME}"
+            - name: NEO4J_READER_PASSWORD
+              value: "${EXTRACTION_NEO4J_READER_PASSWORD}"
+            - name: NEO4J_INSTANCE_CREATOR_USERNAME
+              value: "${EXTRACTION_NEO4J_INSTANCE_CREATOR_USERNAME}"
+            - name: NEO4J_INSTANCE_CREATOR_PASSWORD
+              value: "${EXTRACTION_NEO4J_INSTANCE_CREATOR_PASSWORD}"
+            # Neo4j per-database credentials
+            - name: NEO4J_EONV_USERNAME
+              value: "${EXTRACTION_NEO4J_EONV_USERNAME}"
+            - name: NEO4J_EONV_PASSWORD
+              value: "${EXTRACTION_NEO4J_EONV_PASSWORD}"
+            - name: NEO4J_RGBFASTIGHET_USERNAME
+              value: "${EXTRACTION_NEO4J_RGBFASTIGHET_USERNAME}"
+            - name: NEO4J_RGBFASTIGHET_PASSWORD
+              value: "${EXTRACTION_NEO4J_RGBFASTIGHET_PASSWORD}"
+            - name: NEO4J_JOHANTEST_USERNAME
+              value: "${EXTRACTION_NEO4J_JOHANTEST_USERNAME}"
+            - name: NEO4J_JOHANTEST_PASSWORD
+              value: "${EXTRACTION_NEO4J_JOHANTEST_PASSWORD}"
+            - name: NEO4J_DELAVALCALCIFER_USERNAME
+              value: "${EXTRACTION_NEO4J_DELAVALCALCIFER_USERNAME}"
+            - name: NEO4J_DELAVALCALCIFER_PASSWORD
+              value: "${EXTRACTION_NEO4J_DELAVALCALCIFER_PASSWORD}"
+            - name: NEO4J_FACILITYMGMT_USERNAME
+              value: "${EXTRACTION_NEO4J_FACILITYMGMT_USERNAME}"
+            - name: NEO4J_FACILITYMGMT_PASSWORD
+              value: "${EXTRACTION_NEO4J_FACILITYMGMT_PASSWORD}"
+            # PostgreSQL
+            - name: POSTGRES_HOST
+              value: "${EXTRACTION_POSTGRES_HOST}"
+            - name: POSTGRES_PORT
+              value: "${EXTRACTION_POSTGRES_PORT}"
+            - name: POSTGRES_READER_USERNAME
+              value: "${EXTRACTION_POSTGRES_READER_USERNAME}"
+            - name: POSTGRES_READER_PASSWORD
+              value: "${EXTRACTION_POSTGRES_READER_PASSWORD}"
+            - name: POSTGRES_DATABASE
+              value: "${EXTRACTION_POSTGRES_DATABASE}"
+            # OpenAI
+            - name: OPENAI_API_KEY
+              value: "${EXTRACTION_OPENAI_API_KEY}"
+            # MinIO/S3
+            - name: MINIO_ACCESS_KEY
+              value: "${EXTRACTION_MINIO_ACCESS_KEY}"
+            - name: MINIO_SECRET_KEY
+              value: "${EXTRACTION_MINIO_SECRET_KEY}"
+            - name: MINIO_ENDPOINT_URL
+              value: "${EXTRACTION_MINIO_ENDPOINT_URL}"
+            - name: USE_MINIO
+              value: "${EXTRACTION_USE_MINIO}"
+            - name: S3_ACCESS_KEY
+              value: "${EXTRACTION_MINIO_ACCESS_KEY}"
+            - name: S3_SECRET_ACCESS_KEY
+              value: "${EXTRACTION_MINIO_SECRET_KEY}"
+            - name: S3_ENDPOINT_URL
+              value: "${EXTRACTION_MINIO_ENDPOINT_URL}"
+            - name: AWS_ACCESS_KEY_ID
+              value: "${EXTRACTION_MINIO_ACCESS_KEY}"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "${EXTRACTION_MINIO_SECRET_KEY}"
+            # Logging
+            - name: FILE_LOG_LEVEL
+              value: "INFO"
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: calcifer-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extraction-graph-interface
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: extraction-graph-interface
+  ports:
+    - port: 80
+      targetPort: 8101
+# No public Ingress - internal service only
+---
+# ============================================================================
+# Calcifer Extractor - Document extraction
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extraction-calcifer-extractor
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: extraction-calcifer-extractor
+  template:
+    metadata:
+      labels:
+        app: extraction-calcifer-extractor
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: extraction-calcifer-extractor
+          image: digitaltvilling/dt-calcifer:calcifer-document-extractor${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            # Service URL (K8s internal DNS - port 80)
+            - name: GRAPH_INTERFACE_URL
+              value: "http://extraction-graph-interface"
+            # Neo4j
+            - name: NEO4J_URL
+              value: "${EXTRACTION_NEO4J_URL}"
+            - name: NEO4J_READER_USERNAME
+              value: "${EXTRACTION_NEO4J_READER_USERNAME}"
+            - name: NEO4J_READER_PASSWORD
+              value: "${EXTRACTION_NEO4J_READER_PASSWORD}"
+            - name: NEO4J_INSTANCE_CREATOR_USERNAME
+              value: "${EXTRACTION_NEO4J_INSTANCE_CREATOR_USERNAME}"
+            - name: NEO4J_INSTANCE_CREATOR_PASSWORD
+              value: "${EXTRACTION_NEO4J_INSTANCE_CREATOR_PASSWORD}"
+            # Neo4j per-database credentials
+            - name: NEO4J_EONV_USERNAME
+              value: "${EXTRACTION_NEO4J_EONV_USERNAME}"
+            - name: NEO4J_EONV_PASSWORD
+              value: "${EXTRACTION_NEO4J_EONV_PASSWORD}"
+            - name: NEO4J_RGBFASTIGHET_USERNAME
+              value: "${EXTRACTION_NEO4J_RGBFASTIGHET_USERNAME}"
+            - name: NEO4J_RGBFASTIGHET_PASSWORD
+              value: "${EXTRACTION_NEO4J_RGBFASTIGHET_PASSWORD}"
+            - name: NEO4J_JOHANTEST_USERNAME
+              value: "${EXTRACTION_NEO4J_JOHANTEST_USERNAME}"
+            - name: NEO4J_JOHANTEST_PASSWORD
+              value: "${EXTRACTION_NEO4J_JOHANTEST_PASSWORD}"
+            - name: NEO4J_DELAVALCALCIFER_USERNAME
+              value: "${EXTRACTION_NEO4J_DELAVALCALCIFER_USERNAME}"
+            - name: NEO4J_DELAVALCALCIFER_PASSWORD
+              value: "${EXTRACTION_NEO4J_DELAVALCALCIFER_PASSWORD}"
+            - name: NEO4J_FACILITYMGMT_USERNAME
+              value: "${EXTRACTION_NEO4J_FACILITYMGMT_USERNAME}"
+            - name: NEO4J_FACILITYMGMT_PASSWORD
+              value: "${EXTRACTION_NEO4J_FACILITYMGMT_PASSWORD}"
+            # PostgreSQL
+            - name: POSTGRES_HOST
+              value: "${EXTRACTION_POSTGRES_HOST}"
+            - name: POSTGRES_PORT
+              value: "${EXTRACTION_POSTGRES_PORT}"
+            - name: POSTGRES_READER_USERNAME
+              value: "${EXTRACTION_POSTGRES_READER_USERNAME}"
+            - name: POSTGRES_READER_PASSWORD
+              value: "${EXTRACTION_POSTGRES_READER_PASSWORD}"
+            - name: POSTGRES_DATABASE
+              value: "${EXTRACTION_POSTGRES_DATABASE}"
+            # MinIO
+            - name: MINIO_ACCESS_KEY
+              value: "${EXTRACTION_MINIO_ACCESS_KEY}"
+            - name: MINIO_SECRET_KEY
+              value: "${EXTRACTION_MINIO_SECRET_KEY}"
+            - name: MINIO_ENDPOINT_URL
+              value: "${EXTRACTION_MINIO_ENDPOINT_URL}"
+            - name: USE_MINIO
+              value: "${EXTRACTION_USE_MINIO}"
+            # OpenAI
+            - name: OPENAI_API_KEY
+              value: "${EXTRACTION_OPENAI_API_KEY}"
+            # Logging
+            - name: FILE_LOG_LEVEL
+              value: "INFO"
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: calcifer-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extraction-calcifer-extractor
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: extraction-calcifer-extractor
+  ports:
+    - port: 80
+      targetPort: 8000
+# No public Ingress - internal service only
+---
+# ============================================================================
+# Entity Extractor - SpaCy NER
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extraction-entity-extractor
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: extraction-entity-extractor
+  template:
+    metadata:
+      labels:
+        app: extraction-entity-extractor
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: extraction-entity-extractor
+          image: digitaltvilling/dt-calcifer-extraction-pipeline:calcifer-entity-extractor${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8105
+          env:
+            - name: SPACY_MODEL
+              value: "${EXTRACTION_SPACY_MODEL}"
+            # Logging
+            - name: FILE_LOG_LEVEL
+              value: "INFO"
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+            - name: term-lists
+              mountPath: /app/term_lists
+              readOnly: true
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: calcifer-logs
+        - name: term-lists
+          configMap:
+            name: entity-extractor-term-lists
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extraction-entity-extractor
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: extraction-entity-extractor
+  ports:
+    - port: 80
+      targetPort: 8105
+# No public Ingress - internal service only
+---
+# ============================================================================
+# RAG Extractor - RAG enhancement
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extraction-rag-extractor
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: extraction-rag-extractor
+  template:
+    metadata:
+      labels:
+        app: extraction-rag-extractor
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: extraction-rag-extractor
+          image: digitaltvilling/dt-calcifer-extraction-pipeline:calcifer-rag-enhancer${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8103
+          env:
+            # Service URL (K8s internal DNS - port 80)
+            - name: GRAPH_INTERFACE_URL
+              value: "http://extraction-graph-interface"
+            # Neo4j
+            - name: NEO4J_URL
+              value: "${EXTRACTION_NEO4J_URL}"
+            - name: NEO4J_READER_USERNAME
+              value: "${EXTRACTION_NEO4J_READER_USERNAME}"
+            - name: NEO4J_READER_PASSWORD
+              value: "${EXTRACTION_NEO4J_READER_PASSWORD}"
+            - name: NEO4J_INSTANCE_CREATOR_USERNAME
+              value: "${EXTRACTION_NEO4J_INSTANCE_CREATOR_USERNAME}"
+            - name: NEO4J_INSTANCE_CREATOR_PASSWORD
+              value: "${EXTRACTION_NEO4J_INSTANCE_CREATOR_PASSWORD}"
+            # Neo4j per-database credentials
+            - name: NEO4J_EONV_USERNAME
+              value: "${EXTRACTION_NEO4J_EONV_USERNAME}"
+            - name: NEO4J_EONV_PASSWORD
+              value: "${EXTRACTION_NEO4J_EONV_PASSWORD}"
+            - name: NEO4J_RGBFASTIGHET_USERNAME
+              value: "${EXTRACTION_NEO4J_RGBFASTIGHET_USERNAME}"
+            - name: NEO4J_RGBFASTIGHET_PASSWORD
+              value: "${EXTRACTION_NEO4J_RGBFASTIGHET_PASSWORD}"
+            - name: NEO4J_JOHANTEST_USERNAME
+              value: "${EXTRACTION_NEO4J_JOHANTEST_USERNAME}"
+            - name: NEO4J_JOHANTEST_PASSWORD
+              value: "${EXTRACTION_NEO4J_JOHANTEST_PASSWORD}"
+            - name: NEO4J_DELAVALCALCIFER_USERNAME
+              value: "${EXTRACTION_NEO4J_DELAVALCALCIFER_USERNAME}"
+            - name: NEO4J_DELAVALCALCIFER_PASSWORD
+              value: "${EXTRACTION_NEO4J_DELAVALCALCIFER_PASSWORD}"
+            - name: NEO4J_FACILITYMGMT_USERNAME
+              value: "${EXTRACTION_NEO4J_FACILITYMGMT_USERNAME}"
+            - name: NEO4J_FACILITYMGMT_PASSWORD
+              value: "${EXTRACTION_NEO4J_FACILITYMGMT_PASSWORD}"
+            # OpenAI
+            - name: OPENAI_API_KEY
+              value: "${EXTRACTION_OPENAI_API_KEY}"
+            # Logging
+            - name: FILE_LOG_LEVEL
+              value: "INFO"
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: calcifer-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extraction-rag-extractor
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: extraction-rag-extractor
+  ports:
+    - port: 80
+      targetPort: 8103
+# No public Ingress - internal service only

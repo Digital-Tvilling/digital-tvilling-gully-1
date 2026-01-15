@@ -1,0 +1,162 @@
+# ============================================================================
+# Keel - Automated Kubernetes Deployment Updates
+# ============================================================================
+# Keel watches Docker Hub for image changes and triggers rolling updates
+# for deployments with keel.sh/* annotations.
+# ============================================================================
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keel
+  namespace: ${NAMESPACE}
+  labels:
+    app: keel
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: keel
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+      - extensions
+      - apps
+      - batch
+    resources:
+      - pods
+      - replicasets
+      - replicationcontrollers
+      - statefulsets
+      - deployments
+      - daemonsets
+      - jobs
+      - cronjobs
+    verbs:
+      - get
+      - delete
+      - watch
+      - list
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - pods/portforward
+    verbs:
+      - get
+      - create
+      - update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: keel
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: keel
+subjects:
+  - kind: ServiceAccount
+    name: keel
+    namespace: ${NAMESPACE}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keel
+  namespace: ${NAMESPACE}
+  labels:
+    app: keel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keel
+  template:
+    metadata:
+      labels:
+        app: keel
+    spec:
+      serviceAccountName: keel
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: keel
+          image: keelhq/keel:latest
+          imagePullPolicy: Always
+          command:
+            - /bin/keel
+          env:
+            # Basic auth for UI (disabled)
+            - name: BASIC_AUTH_USER
+              value: ""
+            - name: BASIC_AUTH_PASSWORD
+              value: ""
+            # Polling configuration
+            - name: POLL
+              value: "1"
+            # Helm provider (disabled - we use native k8s)
+            - name: HELM_PROVIDER
+              value: "0"
+            # Webhook notifications (optional)
+            - name: WEBHOOK_ENDPOINT
+              value: ""
+            # Project namespace (watch all)
+            - name: PROJECT_NAMESPACE
+              value: ""
+            # Notification level
+            - name: NOTIFICATION_LEVEL
+              value: "info"
+          ports:
+            - containerPort: 9300
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9300
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keel
+  namespace: ${NAMESPACE}
+  labels:
+    app: keel
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9300
+      targetPort: 9300
+      protocol: TCP
+      name: keel
+  selector:
+    app: keel

@@ -1,0 +1,122 @@
+# Calcifer PostgreSQL database
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calcifer-postgres-init
+  namespace: ${NAMESPACE}
+data:
+  init.sql: |
+    -- Create Calcifer databases
+    CREATE DATABASE calciferconversations;
+    CREATE DATABASE calcifer_mcp_servers;
+    CREATE DATABASE calcifer_threads;
+
+    -- Create reader user (with write access needed for app)
+    CREATE USER calcifer_reader WITH PASSWORD '${CALCIFER_POSTGRES_READER_PASSWORD}';
+
+    -- Grant connect to all databases
+    GRANT CONNECT ON DATABASE calciferconversations TO calcifer_reader;
+    GRANT CONNECT ON DATABASE calcifer_mcp_servers TO calcifer_reader;
+    GRANT CONNECT ON DATABASE calcifer_threads TO calcifer_reader;
+
+    -- Grant permissions on calciferconversations
+    \c calciferconversations
+    GRANT ALL ON SCHEMA public TO calcifer_reader;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO calcifer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO calcifer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO calcifer_reader;
+
+    -- Grant permissions on calcifer_mcp_servers
+    \c calcifer_mcp_servers
+    GRANT ALL ON SCHEMA public TO calcifer_reader;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO calcifer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO calcifer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO calcifer_reader;
+
+    -- Grant permissions on calcifer_threads
+    \c calcifer_threads
+    GRANT ALL ON SCHEMA public TO calcifer_reader;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO calcifer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO calcifer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO calcifer_reader;
+
+    -- Create thread_metadata table for conversation thread management
+    CREATE TABLE IF NOT EXISTS thread_metadata (
+        thread_id VARCHAR(255) PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        thread_display_name TEXT,
+        folder_path TEXT,
+        is_archived BOOLEAN DEFAULT false,
+        is_pinned BOOLEAN DEFAULT false,
+        tags TEXT[] DEFAULT '{}',
+        color VARCHAR(50),
+        last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_thread_metadata_user_id ON thread_metadata(user_id);
+    GRANT ALL PRIVILEGES ON thread_metadata TO calcifer_reader;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calcifer-postgres
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: calcifer-postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: calcifer-postgres
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: calcifer-postgres
+          image: digitaltvilling/timescale-vector-postgis:15
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              value: "${CALCIFER_POSTGRES_PASSWORD}"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_DB
+              value: "postgres"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: calcifer-postgres-data
+        - name: init-scripts
+          configMap:
+            name: calcifer-postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: calcifer-postgres
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: calcifer-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

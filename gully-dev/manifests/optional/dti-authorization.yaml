@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dti-authorization
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dti-authorization
+  template:
+    metadata:
+      labels:
+        app: dti-authorization
+    spec:
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: dti-authorization
+          image: digitaltvilling/dt-dti:opus2-dti-authorization${IMAGE_TAG_SUFFIX}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3001
+          volumeMounts:
+            - name: config
+              mountPath: /app/base/config
+              readOnly: true
+          env:
+            # Core DTI configuration
+            - name: DTI_INSTANCE
+              value: "dti-authorization"
+            - name: PORT
+              value: "3001"
+            - name: HOST
+              value: "0.0.0.0"
+
+            # Database configuration
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DATABASE
+              value: "dti_authorization"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              value: "${POSTGRES_PASSWORD}"
+
+            # JWT Configuration
+            - name: JWT_SECRET
+              value: "${DTI_AUTH_JWT_SECRET}"
+            - name: DTI_AUTH_JWT_SECRET
+              value: "${DTI_AUTH_JWT_SECRET}"
+            - name: JWT_AUDIENCE
+              value: "dti-auth"
+
+            # API Key Authentication
+            - name: DTI_AUTH_API_KEY
+              value: "${DTI_AUTH_API_KEY}"
+
+            # Logging
+            - name: LOG_LEVEL
+              value: "debug"
+            - name: LOG_PRETTY
+              value: "true"
+            - name: FEATURES
+              value: "database"
+            - name: DTI_SERVICE_NAME
+              value: "dti_authorization"
+
+            # IDP Configuration (optional)
+            - name: IDP_PROVIDER
+              value: "${DTI_AUTH_IDP_PROVIDER}"
+            - name: IDP_ISSUER
+              value: "${DTI_AUTH_IDP_ISSUER}"
+            - name: IDP_JWKS_URL
+              value: "${DTI_AUTH_IDP_JWKS_URL}"
+            - name: IDP_AUDIENCE
+              value: "${DTI_AUTH_IDP_AUDIENCE}"
+            - name: IDP_BASE_URL
+              value: "${DTI_AUTH_IDP_BASE_URL}"
+            - name: IDP_CLIENT_ID
+              value: "${DTI_AUTH_IDP_CLIENT_ID}"
+            - name: IDP_CLIENT_SECRET
+              value: "${DTI_AUTH_IDP_CLIENT_SECRET}"
+            - name: IDP_SCOPES
+              value: "${DTI_AUTH_IDP_SCOPES}"
+
+            # Feature flags
+            - name: AUTH_ENABLE_TOKEN_EXCHANGE
+              value: "true"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: dti-authorization-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dti-authorization
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: dti-authorization
+  ports:
+    - port: 80
+      targetPort: 3001
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dti-authorization
+  namespace: ${NAMESPACE}
+spec:
+  rules:
+    - host: dti-authorization.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dti-authorization
+                port:
+                  number: 80
