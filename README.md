@@ -71,10 +71,10 @@ git pull
 # Navigate to the environment you want to manage
 cd gully-prod   # or gully-dev, gully-demo
 
-# Run deployment scripts
-./deploy.sh
-./init.sh       # first-time setup only
-./teardown.sh   # to remove environment
+# Run scripts
+./init.sh       # first-time: creates .env
+./deploy.sh     # deploy the environment
+./teardown.sh   # remove the environment
 ```
 
 ## 🖥️ Hardware
@@ -115,50 +115,55 @@ Each environment has:
 
 ### 1. Initialize Server (First Time Only)
 
-```bash
-# Go to infra folder
-cd /infra/digital-tvilling-gully-1/gully-prod
+Run the **root** `init.sh` to install K3s and tools:
 
-# Install K3s, kubectl, etc. (run once)
+```bash
+cd /infra/digital-tvilling-gully-1
+
+# Install K3s, kubectl, envsubst, tmux (run once)
 ./init.sh
 ```
 
-### 2. Configure Each Environment
+### 2. Initialize Each Environment
 
-For each environment you want to deploy:
+For each environment, run its `init.sh` to create the `.env` file:
 
 ```bash
 # Production
 cd /infra/digital-tvilling-gully-1/gully-prod
-cp .env.example .env
-nano .env  # Configure with your values
+./init.sh    # creates .env with defaults
 
 # Development
 cd /infra/digital-tvilling-gully-1/gully-dev
-cp .env.example .env
-nano .env  # Configure with your values
+./init.sh
 
 # Demo
 cd /infra/digital-tvilling-gully-1/gully-demo
-cp .env.example .env
-nano .env  # Configure with your values
+./init.sh
 ```
 
-**Key settings for each environment:**
+### 3. Configure Each Environment
+
+Edit the `.env` file in each environment (created by `./init.sh`):
+
 ```bash
-# In each .env file
-ENVIRONMENT_NAME=gully-prod  # or gully-dev, gully-demo
-NAMESPACE=gully-prod         # or gully-dev, gully-demo
-DOMAIN=gully-prod            # or gully-dev, gully-demo
-TAILSCALE_IP=<your-tailscale-ip>
-
-# Image tags are pre-configured in manifests:
-# - gully-prod: uses :stable
-# - gully-dev: uses :dev
-# - gully-demo: uses :stable
+cd /infra/digital-tvilling-gully-1/gully-prod
+nano .env  # Edit secrets and Tailscale IP
 ```
 
-### 3. Create Docker Hub Secret (Per Namespace)
+**Key settings to configure:**
+```bash
+# Already set by init.sh:
+ENVIRONMENT_NAME=gully-prod
+NAMESPACE=gully-prod
+DOMAIN=gully-prod
+
+# You need to set:
+TAILSCALE_IP=<your-tailscale-ip>   # Run: tailscale ip -4
+# ... and other secrets (Neo4j, MinIO, etc.)
+```
+
+### 4. Create Docker Hub Secret (Per Namespace)
 
 ```bash
 # For each environment namespace
@@ -181,7 +186,7 @@ kubectl create secret docker-registry dockerhub \
   -n gully-demo
 ```
 
-### 4. Deploy Environments
+### 5. Deploy Environments
 
 Deploy each environment independently:
 
@@ -199,7 +204,7 @@ cd /infra/digital-tvilling-gully-1/gully-demo
 ./deploy.sh
 ```
 
-### 5. Configure Tailscale DNS
+### 6. Configure Tailscale DNS
 
 Add DNS entries for each environment:
 
