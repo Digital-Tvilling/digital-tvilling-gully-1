@@ -4,17 +4,30 @@ On-premises deployment of the Digital Tvilling platform on the **NVIDIA DGX Spar
 
 ## 📍 Repository Location on Gully
 
-On the Gully server, this repository should be cloned into **`/infra`**:
+On the Gully server, this repository should be cloned into **`/infra`** with shared access for all infrastructure users.
+
+### Initial Setup (run once on the server)
 
 ```bash
-# Initial setup (run once on the server)
+# Create infraadmins group and add users
+sudo groupadd infraadmins
+sudo usermod -aG infraadmins filip
+sudo usermod -aG infraadmins johanhanses
+sudo usermod -aG infraadmins oliver
+
+# Create /infra with shared group ownership
 sudo mkdir -p /infra
+sudo chown root:infraadmins /infra
+sudo chmod 2775 /infra  # setgid ensures new files inherit group
+
+# Clone the repo (any infraadmins user can do this after re-login)
 cd /infra
-sudo git clone https://github.com/Digital-Tvilling/digital-tvilling-gully-1.git
-sudo chown -R $USER:$USER /infra
+git clone https://github.com/Digital-Tvilling/digital-tvilling-gully-1.git
 ```
 
-This creates `/infra/digital-tvilling-gully-1/`. All users should use this standard location for infrastructure management:
+> **Note:** Users need to log out and back in after being added to the `infraadmins` group.
+
+This creates `/infra/digital-tvilling-gully-1/`. All `infraadmins` members can now manage deployments:
 
 ```bash
 # Go to the infra folder
