@@ -19,13 +19,45 @@ sudo usermod -aG infraadmins oliver
 sudo mkdir -p /infra
 sudo chown root:infraadmins /infra
 sudo chmod 2775 /infra  # setgid ensures new files inherit group
-
-# Clone the repo (any infraadmins user can do this after re-login)
-cd /infra
-git clone https://github.com/Digital-Tvilling/digital-tvilling-gully-1.git
 ```
 
 > **Note:** Users need to log out and back in after being added to the `infraadmins` group.
+
+### Set Up GitHub Deploy Key
+
+Create a deploy key so Git can clone the private repository:
+
+```bash
+# Generate the deploy key (run as your user)
+ssh-keygen -t ed25519 -C "deploy-key-gully-1" -f ~/.ssh/deploy_key -N ""
+
+# Configure SSH to use this key for GitHub
+cat >> ~/.ssh/config << EOF
+Host github.com
+  IdentityFile ~/.ssh/deploy_key
+  IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+
+# Add GitHub's host key to known_hosts (avoids authenticity prompt)
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+# Show the public key (copy this)
+cat ~/.ssh/deploy_key.pub
+```
+
+**Add the key to GitHub:**
+1. Go to [digital-tvilling-gully-1 repo](https://github.com/Digital-Tvilling/digital-tvilling-gully-1) → **Settings** → **Deploy keys** → **Add deploy key**
+2. Title: `gully-1-server`
+3. Paste the public key and save
+
+### Clone the Repository
+
+```bash
+# Clone via SSH (any infraadmins user can do this after re-login)
+cd /infra
+git clone git@github.com:Digital-Tvilling/digital-tvilling-gully-1.git
+```
 
 This creates `/infra/digital-tvilling-gully-1/`. All `infraadmins` members can now manage deployments:
 
