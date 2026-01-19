@@ -70,30 +70,6 @@ This creates `/infra/digital-tvilling-gully-1/`.
 | **Environment** | `./deploy.sh` | Deploys services to namespace | Each deployment |
 | **Environment** | `./teardown.sh` | Removes namespace and resources | When removing env |
 
-### First-Time Setup (full sequence)
-
-```bash
-# 1. Machine setup (once per server)
-cd /infra/digital-tvilling-gully-1
-./init.sh                    # Installs K3s, kubectl, tools
-
-# 2. Environment setup (for each: gully-prod, gully-dev, gully-demo)
-cd gully-prod
-./init.sh                    # Creates .env with defaults
-nano .env                    # Edit secrets, passwords, API keys
-./deploy.sh                  # Deploy to Kubernetes
-```
-
-### Daily Workflow
-
-```bash
-cd /infra/digital-tvilling-gully-1
-git pull                     # Get latest changes
-
-cd gully-prod                # or gully-dev, gully-demo
-./deploy.sh                  # Redeploy
-```
-
 ## 🖥️ Hardware
 
 | Component | Specification |
