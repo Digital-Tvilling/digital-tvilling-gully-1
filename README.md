@@ -158,25 +158,44 @@ TAILSCALE_IP=<your-tailscale-ip>   # Run: tailscale ip -4
 
 ### 4. Create Docker Hub Secret (Per Namespace)
 
+For each environment namespace, use the secure method that doesn't save credentials in shell history:
+
 ```bash
-# For each environment namespace
-kubectl create secret docker-registry dockerhub \
-  --docker-server=https://index.docker.io/v1/ \
-  --docker-username=<username> \
-  --docker-password=<token> \
-  -n gully-prod
+# For gully-dev
+read -p "Docker Hub username: " DOCKER_USER
+read -sp "Docker Hub password/token: " DOCKER_PASS && echo
 
 kubectl create secret docker-registry dockerhub \
   --docker-server=https://index.docker.io/v1/ \
-  --docker-username=<username> \
-  --docker-password=<token> \
+  --docker-username="$DOCKER_USER" \
+  --docker-password="$DOCKER_PASS" \
   -n gully-dev
 
+unset DOCKER_USER DOCKER_PASS
+
+# For gully-demo
+read -p "Docker Hub username: " DOCKER_USER
+read -sp "Docker Hub password/token: " DOCKER_PASS && echo
+
 kubectl create secret docker-registry dockerhub \
   --docker-server=https://index.docker.io/v1/ \
-  --docker-username=<username> \
-  --docker-password=<token> \
+  --docker-username="$DOCKER_USER" \
+  --docker-password="$DOCKER_PASS" \
   -n gully-demo
+
+unset DOCKER_USER DOCKER_PASS
+
+# For gully-prod
+read -p "Docker Hub username: " DOCKER_USER
+read -sp "Docker Hub password/token: " DOCKER_PASS && echo
+
+kubectl create secret docker-registry dockerhub \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username="$DOCKER_USER" \
+  --docker-password="$DOCKER_PASS" \
+  -n gully-prod
+
+unset DOCKER_USER DOCKER_PASS
 ```
 
 ### 5. Deploy Environments
