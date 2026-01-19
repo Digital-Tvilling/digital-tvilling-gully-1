@@ -38,7 +38,14 @@ if [ ! -f ~/.kube/config ]; then
     mkdir -p ~/.kube
     sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
     sudo chown $USER:$USER ~/.kube/config
+    chmod 600 ~/.kube/config
     log_success "kubectl configured"
+elif [ ! -r ~/.kube/config ]; then
+    log_warn "kubectl config exists but is not readable, fixing permissions..."
+    sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+    sudo chown $USER:$USER ~/.kube/config
+    chmod 600 ~/.kube/config
+    log_success "kubectl config permissions fixed"
 else
     log_info "kubectl already configured, skipping"
 fi
