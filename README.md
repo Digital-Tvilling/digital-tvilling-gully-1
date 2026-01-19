@@ -59,22 +59,39 @@ cd /infra
 git clone git@github.com:Digital-Tvilling/digital-tvilling-gully-1.git
 ```
 
-This creates `/infra/digital-tvilling-gully-1/`. All `infraadmins` members can now manage deployments:
+This creates `/infra/digital-tvilling-gully-1/`.
+
+## 🔧 What Runs Where
+
+| Scope | Script | Purpose | Run When |
+|-------|--------|---------|----------|
+| **Machine** | `./init.sh` (root) | Installs K3s, kubectl, tools | Once per server |
+| **Environment** | `./init.sh` (in gully-*) | Creates `.env` for that env | Once per environment |
+| **Environment** | `./deploy.sh` | Deploys services to namespace | Each deployment |
+| **Environment** | `./teardown.sh` | Removes namespace and resources | When removing env |
+
+### First-Time Setup (full sequence)
 
 ```bash
-# Go to the infra folder
+# 1. Machine setup (once per server)
 cd /infra/digital-tvilling-gully-1
+./init.sh                    # Installs K3s, kubectl, tools
 
-# Update to latest
-git pull
+# 2. Environment setup (for each: gully-prod, gully-dev, gully-demo)
+cd gully-prod
+./init.sh                    # Creates .env with defaults
+nano .env                    # Edit secrets, passwords, API keys
+./deploy.sh                  # Deploy to Kubernetes
+```
 
-# Navigate to the environment you want to manage
-cd gully-prod   # or gully-dev, gully-demo
+### Daily Workflow
 
-# Run scripts
-./init.sh       # first-time: creates .env
-./deploy.sh     # deploy the environment
-./teardown.sh   # remove the environment
+```bash
+cd /infra/digital-tvilling-gully-1
+git pull                     # Get latest changes
+
+cd gully-prod                # or gully-dev, gully-demo
+./deploy.sh                  # Redeploy
 ```
 
 ## 🖥️ Hardware
