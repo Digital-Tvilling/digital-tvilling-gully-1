@@ -1,0 +1,180 @@
+# Garage S3-compatible Object Storage
+# ConfigMap with config.toml template (secrets are substituted via envsubst during deploy)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-config
+  namespace: ${NAMESPACE}
+data:
+  config.toml: |
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir = "/var/lib/garage/data"
+    db_engine = "sqlite"
+    replication_factor = 1
+    
+    # RPC configuration
+    rpc_bind_addr = "[::]:3901"
+    rpc_public_addr = "garage.${NAMESPACE}.svc.cluster.local:3901"
+    rpc_secret = "${GARAGE_RPC_SECRET}"
+    
+    # S3 API configuration
+    [s3_api]
+    s3_region = "garage"
+    api_bind_addr = "[::]:3900"
+    root_domain = ".s3.garage.${DOMAIN}"
+    
+    # S3 Web interface
+    [s3_web]
+    bind_addr = "[::]:3902"
+    root_domain = ".web.garage.${DOMAIN}"
+    index = "index.html"
+    
+    # K2V API (optional)
+    [k2v_api]
+    api_bind_addr = "[::]:3904"
+    
+    # Admin API configuration
+    [admin]
+    api_bind_addr = "[::]:3903"
+    admin_token = "${GARAGE_ADMIN_TOKEN}"
+    metrics_token = "${GARAGE_METRICS_TOKEN}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: garage
+  namespace: ${NAMESPACE}
+  annotations:
+    keel.sh/policy: "force"
+    keel.sh/trigger: "poll"
+    keel.sh/pollSchedule: "@every 5m"
+    keel.sh/match-tag: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: garage
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: garage
+    spec:
+      containers:
+        - name: garage
+          image: dxflrs/garage:v2.1.0
+          command: ["/garage", "server"]
+          ports:
+            - containerPort: 3900
+              name: s3-api
+            - containerPort: 3901
+              name: rpc
+            - containerPort: 3902
+              name: s3-web
+            - containerPort: 3903
+              name: admin-api
+            - containerPort: 3904
+              name: k2v-api
+          env:
+            - name: RUST_LOG
+              value: "garage=info"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/garage.toml
+              subPath: config.toml
+              readOnly: true
+            - name: meta
+              mountPath: /var/lib/garage/meta
+            - name: data
+              mountPath: /var/lib/garage/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            tcpSocket:
+              port: 3900
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 3900
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: garage-config
+        - name: meta
+          persistentVolumeClaim:
+            claimName: garage-meta
+        - name: data
+          persistentVolumeClaim:
+            claimName: garage-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: garage
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: garage
+  ports:
+    - name: s3-api
+      port: 3900
+      targetPort: 3900
+    - name: rpc
+      port: 3901
+      targetPort: 3901
+    - name: s3-web
+      port: 3902
+      targetPort: 3902
+    - name: admin-api
+      port: 3903
+      targetPort: 3903
+    - name: k2v-api
+      port: 3904
+      targetPort: 3904
+---
+# Ingress for S3 API (main endpoint for object storage)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: garage-s3
+  namespace: ${NAMESPACE}
+spec:
+  rules:
+    - host: garage-s3.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: garage
+                port:
+                  number: 3900
+---
+# Ingress for Admin API (used by WebUI)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: garage-admin
+  namespace: ${NAMESPACE}
+spec:
+  rules:
+    - host: garage-admin.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: garage
+                port:
+                  number: 3903
