@@ -36,9 +36,18 @@ if [ ! -f .env ]; then
     log_info "Creating .env for $ENV_DIR..."
     cp .env.example .env
     # Pre-populate some values based on environment
-    sed -i '' "s/ENVIRONMENT_NAME=my-environment/ENVIRONMENT_NAME=$ENV_DIR/" .env
-    sed -i '' "s/NAMESPACE=digital-tvilling-\${ENVIRONMENT_NAME}/NAMESPACE=$ENV_DIR/" .env
-    sed -i '' "s/DOMAIN=\${NAMESPACE}/DOMAIN=$ENV_DIR/" .env
+    # Use portable sed syntax (works on both macOS and Linux)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS/BSD sed requires empty string after -i
+        sed -i '' "s/ENVIRONMENT_NAME=my-environment/ENVIRONMENT_NAME=$ENV_DIR/" .env
+        sed -i '' "s/NAMESPACE=digital-tvilling-\${ENVIRONMENT_NAME}/NAMESPACE=$ENV_DIR/" .env
+        sed -i '' "s/DOMAIN=\${NAMESPACE}/DOMAIN=$ENV_DIR/" .env
+    else
+        # Linux sed doesn't require empty string
+        sed -i "s/ENVIRONMENT_NAME=my-environment/ENVIRONMENT_NAME=$ENV_DIR/" .env
+        sed -i "s/NAMESPACE=digital-tvilling-\${ENVIRONMENT_NAME}/NAMESPACE=$ENV_DIR/" .env
+        sed -i "s/DOMAIN=\${NAMESPACE}/DOMAIN=$ENV_DIR/" .env
+    fi
     log_success "Created .env with environment defaults"
 else
     log_info ".env already exists, skipping"
