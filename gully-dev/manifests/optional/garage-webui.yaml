@@ -24,7 +24,7 @@ spec:
         - name: dockerhub
       containers:
         - name: garage-webui
-          image: digitaltvilling/garage-webui:${IMAGE_TAG_SUFFIX}
+          image: digitaltvilling/dt-dti:s3webui-${IMAGE_TAG_SUFFIX}
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
